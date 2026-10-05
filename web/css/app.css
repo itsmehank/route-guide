@@ -114,7 +114,7 @@ small{font-size: var(--fs-xs)}
 .sg-msg.err{color: #b3261e}
 
 /* ===== 패널 본문 ===== */
-.pbody{flex: 1; overflow: auto; overscroll-behavior: contain; position: relative}
+.pbody{flex: 1; overflow: auto; overscroll-behavior: contain; position: relative; overflow-anchor: none}   /* 스크롤 고정은 compare.js keepScroll 이 직접 한다 */
 .view{padding: 12px 16px 20px; view-transition-name: panel-view}
 .empty{padding: 36px 12px; text-align: center; color: var(--muted)}
 .empty.err{color: #b3261e; display: grid; gap: 12px; justify-items: center}

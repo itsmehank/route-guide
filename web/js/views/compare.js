@@ -81,7 +81,7 @@ function summaryHtml(n){
   return '<h4>상황별로 고르면</h4><p>' + sm.map(sent).join('') + '</p>';
 }
 
-function hazardsHtml(er, nr, ri, s){
+function hazardsHtml(er, ri){
   var list = er.hazards || [];
   if (!list.length) return '<h4>위험 지점</h4><p class="muted">이 경로에서 공공데이터로 확인된 위험 지점이 없어요.</p>';
   var groups = {};
@@ -92,24 +92,28 @@ function hazardsHtml(er, nr, ri, s){
     var info = hzInfo(t);
     return '<span class="hzchip tone-' + info.tone + '">' + hzIcon(t, groups[t][0][0].text) + esc(info.label) + ' ' + groups[t].length + '</span>';
   }).join('');
-  var hn = nr && nr.hazard_notes ? nr.hazard_notes.filter(function(x){ return x.text; }) : [];
-  var notes = !hn.length ? '' : '<p>' + hn.slice(0, 2).map(sent).join('') + '</p>'
-    + (hn.length > 2 ? '<details class="more" data-k="hn-' + ri + '"><summary>AI 주의 안내 ' + (hn.length - 2) + '개 더</summary><p>'
-       + hn.slice(2).map(sent).join('') + '</p></details>' : '');
   var body = types.map(function(t){
     var info = hzInfo(t), g = groups[t];
     var open = info.tone === 'acc' || info.tone === 'ice';
     return '<details class="hzgroup"' + (open ? ' open' : '') + ' data-k="hz-' + ri + '-' + t + '">'
       + '<summary><span class="hzchip tone-' + info.tone + '">' + hzIcon(t, g[0][0].text) + esc(info.label) + '</span> ' + g.length + '곳</summary><ul>'
       + g.map(function(p){
-          var h = p[0], on = s.hazard && s.hazard.id === er.id && s.hazard.idx === p[1];
-          return '<li><button class="hzitem' + (on ? ' on' : '') + '" data-hz="' + p[1] + '" data-r="' + esc(er.id) + '">'
+          var h = p[0];
+          return '<li><button class="hzitem" data-hz="' + p[1] + '" data-r="' + esc(er.id) + '">'
             + esc((h.text || '').replace(/^[^—]*—\s*/, ''))
             + '<small>' + esc(h.detail || '') + (h.detail ? ' · ' : '') + '경로에서 ' + h.distance_m + 'm</small></button></li>';
         }).join('') + '</ul></details>';
   }).join('');
   return '<h4>위험 지점 <span class="muted">공공데이터 ' + list.length + '곳 · 누르면 지도에서 보여줘요</span></h4>'
-    + '<div class="hzchips">' + chips + '</div>' + notes + body;
+    + '<div class="hzchips">' + chips + '</div>' + body;
+}
+
+function hazardNotesHtml(nr, ri){
+  var hn = nr && nr.hazard_notes ? nr.hazard_notes.filter(function(x){ return x.text; }) : [];
+  if (!hn.length) return '';
+  return '<h4>AI 주의 안내</h4><p>' + hn.slice(0, 2).map(sent).join('') + '</p>'
+    + (hn.length > 2 ? '<details class="more" data-k="hn-' + ri + '"><summary>' + (hn.length - 2) + '개 더 보기</summary><p>'
+       + hn.slice(2).map(sent).join('') + '</p></details>' : '');
 }
 
 function checklistHtml(er, nr, ri, s){
@@ -137,21 +141,62 @@ function checklistHtml(er, nr, ri, s){
   }).join('') + '</ul>';
 }
 
-function paneHtml(s){
+// 패널 구역 [키, html]. 순서 = 화면 순서. AI 와 무관한 구역(위험 지점 목록·근거 사실)은 내용이 그대로라 다시 그려지지 않는다
+function paneSections(s){
   var ev = s.cmp.data.evaluation, nd = s.cmp.narr.data;
-  var r = s.routes[s.sel]; if (!r) return '';
-  var er = ev.routes.find(function(x){ return x.id === r.option; }); if (!er) return '';
+  var r = s.routes[s.sel]; if (!r) return [];
+  var er = ev.routes.find(function(x){ return x.id === r.option; }); if (!er) return [];
   var nr = nd && nd.routes ? nd.routes.find(function(x){ return x.id === er.id; }) : null;
-  var html = '<a class="btn primary wide brief-link" target="_blank" rel="noopener" href="' + esc(briefingUrl(s)) + '">📋 이 경로로 출발 전 브리핑 보기 ↗</a>';
-  if (nr && (nr.verdict.text || nr.comfort_note.text))
-    html += '<p class="verdict">' + sent(nr.verdict) + sent(nr.comfort_note) + '</p>';
-  html += checklistHtml(er, nr, s.sel, s);
-  html += hazardsHtml(er, nr, s.sel, s);
-  if (nr && nr.overview.length)
-    html += '<details class="more" data-k="ov-' + s.sel + '"><summary>이 길의 큰 줄기</summary><p>' + nr.overview.map(sent).join('') + '</p></details>';
-  html += '<details class="more facts" data-k="ft-' + s.sel + '"><summary>근거 사실 ' + er.facts.length + '개 (AI 설명의 출처)</summary><table class="ft">'
-    + er.facts.map(function(f){ return '<tr><td>' + esc(f.id) + '</td><td>' + esc(f.text) + '</td></tr>'; }).join('') + '</table></details>';
-  return html;
+  var done = s.cmp.narr.status === 'done';
+  return [
+    ['brief', '<a class="btn primary wide brief-link" target="_blank" rel="noopener" href="' + esc(briefingUrl(s)) + '">📋 이 경로로 출발 전 브리핑 보기 ↗</a>'],
+    ['verdict', nr && (nr.verdict.text || nr.comfort_note.text) ? '<p class="verdict">' + sent(nr.verdict) + sent(nr.comfort_note) + '</p>' : ''],
+    ['check', checklistHtml(er, done ? nr : null, s.sel, s)],
+    ['hazards', hazardsHtml(er, s.sel)],
+    ['hznotes', hazardNotesHtml(nr, s.sel)],
+    ['overview', nr && nr.overview.length
+      ? '<details class="more" data-k="ov-' + s.sel + '"><summary>이 길의 큰 줄기</summary><p>' + nr.overview.map(sent).join('') + '</p></details>' : ''],
+    ['facts', '<details class="more facts" data-k="ft-' + s.sel + '"><summary>근거 사실 ' + er.facts.length + '개 (AI 설명의 출처)</summary><table class="ft">'
+      + er.facts.map(function(f){ return '<tr><td>' + esc(f.id) + '</td><td>' + esc(f.text) + '</td></tr>'; }).join('') + '</table></details>']
+  ];
+}
+
+function renderPane(pane, sections){
+  sections.forEach(function(sec){
+    var el = pane.querySelector(':scope > [data-sec="' + sec[0] + '"]');
+    if (!el){ el = document.createElement('div'); el.dataset.sec = sec[0]; pane.appendChild(el); }
+    keepOpen(el, sec[1]);
+    el.hidden = !sec[1];
+  });
+}
+
+/* 스크롤 고정: 위쪽 내용이 늘거나 줄어도, 보고 있던 요소가 화면의 같은 자리에 머물게 한다.
+   (측정: 스트리밍 85초 동안 위험 지점 목록이 7번, 최대 804px 밀렸다)
+   기준 요소 = 스크롤 영역 위쪽에 걸친 첫 구역·항목. 갱신 전후 그 요소의 위치 차이만큼 스크롤을 보정한다. */
+function keepScroll(scroller, update){
+  if (!scroller){ update(); return; }
+  var top = scroller.getBoundingClientRect().top, marks = [];
+  if (scroller.scrollTop > 0){
+    // 고정(sticky) 경로 탭은 늘 같은 자리라 기준이 될 수 없다. 화면에 보이는 '항목'들을 기준 후보로 적어 둔다.
+    // 갱신 때 통째로 바뀌는 항목(예: 완료 시 AI 체크리스트로 교체)도 있어서, 하나가 아니라 여러 개를 적고
+    // 갱신 뒤에도 남아 있는 첫 후보로 보정한다. 구역 껍데기는 마지막 수단.
+    var cands = scroller.querySelectorAll('.pane .hzitem, .pane .check li, .pane h4, .pane .hzgroup > summary, .pane .brief-link');
+    for (var i = 0; i < cands.length && marks.length < 12; i++){
+      var rc = cands[i].getBoundingClientRect();
+      if (rc.height && rc.top >= top - 1) marks.push([cands[i], rc.top]);
+    }
+    scroller.querySelectorAll('.pane > [data-sec]').forEach(function(el){
+      var rc = el.getBoundingClientRect();
+      if (rc.height && rc.bottom > top) marks.push([el, rc.top]);
+    });
+  }
+  update();
+  for (var k = 0; k < marks.length; k++){
+    if (!marks[k][0].isConnected) continue;
+    var d = marks[k][0].getBoundingClientRect().top - marks[k][1];
+    if (Math.abs(d) >= 1) scroller.scrollTop += d;
+    return;
+  }
 }
 
 export function briefingUrl(s){
@@ -219,15 +264,22 @@ export function renderCompare(host, s, act){
     return;
   }
 
-  var tsig = c.key + '|' + s.routes.length;
-  if (tbl.dataset.sig !== tsig){ tbl.innerHTML = '<h4>한눈에 비교</h4>' + tableHtml(c.data.evaluation, s); tbl.dataset.sig = tsig; }
+  keepScroll(host.closest('.pbody'), function(){
+    var tsig = c.key + '|' + s.routes.length;
+    if (tbl.dataset.sig !== tsig){ tbl.innerHTML = '<h4>한눈에 비교</h4>' + tableHtml(c.data.evaluation, s); tbl.dataset.sig = tsig; }
 
-  ai.hidden = false;
-  var aisig = c.narr.status + '|' + c.narr.stage + '|' + JSON.stringify(c.narr.data && c.narr.data.comparison && c.narr.data.comparison.headline);
-  if (ai.dataset.sig !== aisig){ ai.innerHTML = aiHtml(c.narr); ai.dataset.sig = aisig; }
-  keepOpen(sum, summaryHtml(c.narr));
-  keepOpen(tabs, tabsHtml(s));
-  keepOpen(pane, paneHtml(s));
+    ai.hidden = false;
+    var aisig = c.narr.status + '|' + c.narr.stage + '|' + JSON.stringify(c.narr.data && c.narr.data.comparison && c.narr.data.comparison.headline);
+    if (ai.dataset.sig !== aisig){ ai.innerHTML = aiHtml(c.narr); ai.dataset.sig = aisig; }
+    keepOpen(sum, summaryHtml(c.narr));
+    keepOpen(tabs, tabsHtml(s));
+    renderPane(pane, paneSections(s));
+  });
+  pane.querySelectorAll('.hzitem').forEach(function(b){
+    var on = !!(s.hazard && s.hazard.id === b.dataset.r && s.hazard.idx === +b.dataset.hz);
+    b.classList.toggle('on', on);
+    if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+  });
 
   clearInterval(ticker);
   if (c.narr.status === 'streaming'){
