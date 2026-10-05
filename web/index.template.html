@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>죽전역 → 강남역 경로 (NCP Dynamic Map)</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+            "Malgun Gothic", sans-serif;
+      display: flex; flex-direction: column; background: #f5f6f8; color: #1c1e21;
+    }
+    header {
+      padding: 12px 16px; background: #fff; border-bottom: 1px solid #e2e5e9;
+      display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    }
+    header h1 { font-size: 16px; margin: 0; font-weight: 700; }
+    header .sub { color: #6b7280; font-size: 12px; }
+    main { flex: 1; position: relative; min-height: 0; }
+    /* naver.maps.Map 은 컨테이너의 position 을 relative 로 덮어쓴다.
+       그래서 absolute+inset 으로 크기를 주면 높이가 0 으로 무너진다 — 반드시 실제 크기를 줄 것. */
+    #map { width: 100%; height: 100%; }
+    #panel {
+      position: absolute; top: 12px; right: 12px; z-index: 10; width: 264px;
+      max-height: calc(100% - 24px); overflow: auto; background: rgba(255,255,255,.96);
+      border: 1px solid #e2e5e9; border-radius: 10px; padding: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    }
+    #panel h2 { font-size: 12px; margin: 0 0 8px; color: #6b7280;
+                text-transform: uppercase; letter-spacing: .04em; }
+    .route-item { display: flex; gap: 8px; align-items: flex-start;
+                  padding: 7px 0; border-top: 1px solid #eef0f3; }
+    .route-item:first-of-type { border-top: 0; }
+    .route-item input { margin-top: 3px; }
+    .swatch { width: 10px; height: 10px; border-radius: 2px; margin-top: 5px; flex: none; }
+    .route-meta { font-size: 12px; color: #6b7280; }
+    .route-name { font-size: 13px; font-weight: 600; color: #1c1e21; }
+    #error {
+      display: none; margin: 16px; padding: 14px 16px; border-radius: 8px;
+      background: #fff4f4; border: 1px solid #f3c2c2; color: #a3232a; font-size: 13px;
+    }
+    #error code { background: #fbe3e3; padding: 1px 5px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>죽전역 → 강남역</h1>
+    <span class="sub" id="subtitle">경로 불러오는 중…</span>
+  </header>
+  <div id="error"></div>
+  <main>
+    <div id="map"></div>
+    <div id="panel">
+      <h2>경로 표시</h2>
+      <div id="routes"></div>
+    </div>
+  </main>
+
+  <script>
+    // 인증 실패 시 naver 지도 API 가 호출하는 전역 훅
+    window.navermap_authFailure = function () {
+      showError(
+        '<b>네이버 지도 인증에 실패했습니다.</b><br>' +
+        '이 페이지는 반드시 <code>http://localhost:3000</code> 에서 열어야 합니다 ' +
+        '(콘솔에 등록된 Web 서비스 URL). 파일을 더블클릭해 <code>file://</code> 로 열면 실패합니다.<br>' +
+        '터미널에서: <code>python3 -m http.server 3000 -d out</code>'
+      );
+    };
+    function showError(html) {
+      var el = document.getElementById('error');
+      el.innerHTML = html;
+      el.style.display = 'block';
+    }
+  </script>
+  <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=__NCP_KEY_ID__"></script>
+  <script>
+    var COLORS = {
+      'directions5:trafast':     '#e8452c',
+      'directions5:tracomfort':  '#2b7fd4',
+      'directions5:traoptimal':  '#1f9d55',
+      'directions15:traoptimal': '#8b5cf6'
+    };
+
+    function toLatLngs(path) {
+      return path.map(function (p) { return new naver.maps.LatLng(p[1], p[0]); });
+    }
+
+    function boot(data) {
+      if (typeof naver === 'undefined' || !naver.maps) {
+        showError('지도 스크립트를 불러오지 못했습니다. 네트워크와 클라이언트 ID를 확인하세요.');
+        return;
+      }
+
+      var map = new naver.maps.Map('map', {
+        center: new naver.maps.LatLng(37.41, 127.07),
+        zoom: 11,
+        scaleControl: true,
+        mapTypeControl: true
+      });
+
+      var bounds = null;
+      function extend(latlng) {
+        if (!bounds) { bounds = new naver.maps.LatLngBounds(latlng, latlng); }
+        else { bounds.extend(latlng); }
+      }
+
+      // 출발 / 경유 / 도착 마커
+      var pins = [
+        ['origin', '출발', '#2b7fd4'],
+        ['waypoint', '경유', '#f59e0b'],
+        ['goal', '도착', '#e8452c']
+      ];
+      pins.forEach(function (pin) {
+        var place = data.places[pin[0]];
+        if (!place) return;
+        var latlng = new naver.maps.LatLng(place.coord[1], place.coord[0]);
+        extend(latlng);
+        new naver.maps.Marker({
+          position: latlng,
+          map: map,
+          title: pin[1] + ' · ' + (place.matched || place.title) +
+                 (place.roadAddress ? ' (' + place.roadAddress + ')' : ''),
+          icon: {
+            content:
+              '<div style="transform:translate(-50%,-100%);white-space:nowrap;' +
+              'background:' + pin[2] + ';color:#fff;padding:4px 9px;border-radius:13px;' +
+              'font:600 12px/1.2 sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.3)">' +
+              pin[1] + ' · ' + (place.matched || place.title) + '</div>',
+            anchor: new naver.maps.Point(0, 0)
+          }
+        });
+      });
+
+      // 경로 폴리라인
+      var container = document.getElementById('routes');
+      var drawn = 0;
+      ['directions5', 'directions15'].forEach(function (api) {
+        var routes = data[api] || {};
+        Object.keys(routes).forEach(function (option) {
+          var key = api + ':' + option;
+          var color = COLORS[key];
+          if (!color) return;              // 범례에 정의된 경로만 그린다
+          var route = routes[option];
+          if (!route.path || !route.path.length) return;
+
+          var latlngs = toLatLngs(route.path);
+          latlngs.forEach(extend);
+          var polyline = new naver.maps.Polyline({
+            map: map,
+            path: latlngs,
+            strokeColor: color,
+            strokeWeight: api === 'directions15' ? 6 : 4,
+            strokeOpacity: api === 'directions15' ? 0.65 : 0.9,
+            strokeStyle: api === 'directions15' ? 'shortdash' : 'solid',
+            zIndex: api === 'directions15' ? 50 : 100
+          });
+          drawn++;
+
+          var item = document.createElement('label');
+          item.className = 'route-item';
+          item.innerHTML =
+            '<input type="checkbox" checked>' +
+            '<span class="swatch" style="background:' + color + '"></span>' +
+            '<span><span class="route-name">' +
+            (api === 'directions15' ? 'D15 경유 · ' : 'D5 · ') + route.label +
+            '</span><br><span class="route-meta">' +
+            route.distance_km.toFixed(1) + 'km · ' +
+            route.duration_min.toFixed(0) + '분 · 통행료 ' +
+            (route.toll_fare || 0).toLocaleString() + '원</span></span>';
+          item.querySelector('input').addEventListener('change', function (e) {
+            polyline.setMap(e.target.checked ? map : null);
+          });
+          container.appendChild(item);
+        });
+      });
+
+      if (bounds) { map.fitBounds(bounds, { top: 40, right: 300, bottom: 40, left: 40 }); }
+
+      var best = (data.directions5 || {}).traoptimal;
+      document.getElementById('subtitle').textContent = best
+        ? 'traoptimal 기준 ' + best.distance_km.toFixed(1) + 'km · ' +
+          best.duration_min.toFixed(0) + '분 · 경로 ' + drawn + '개 표시'
+        : '경로 ' + drawn + '개 표시';
+    }
+
+    fetch('./route.json')
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(boot)
+      .catch(function (err) {
+        showError(
+          '<b>route.json 을 읽지 못했습니다 (' + err.message + ').</b><br>' +
+          '먼저 <code>python3 run_scenario.py</code> 를 실행해 경로를 생성한 뒤, ' +
+          '<code>python3 -m http.server 3000 -d out</code> 으로 서빙하세요.'
+        );
+      });
+  </script>
+</body>
+</html>

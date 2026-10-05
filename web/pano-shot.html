@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>pano-shot</title>
+<!-- 서버(serve.py)가 헤드리스 크롬으로 열어 로드뷰 한 장을 정적 이미지로 찍는 전용 페이지.
+     ?lon=&lat=&pan=&tilt=&fov= -->
+<style>html,body{margin:0;background:#e9ecef;overflow:hidden}#p{position:absolute;left:0;top:0}</style>
+</head>
+<body>
+<div id="p"></div>
+<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=__NCP_KEY_ID__&submodules=panorama"></script>
+<script>
+(function(){
+  var q = new URLSearchParams(location.search);
+  function done(state){ document.title = state; }
+  // 서버가 창을 w×h 로 연다. 뷰어도 같은 크기로 못박는다
+  var el = document.getElementById('p');
+  el.style.width = (+q.get('w') || 640) + 'px'; el.style.height = (+q.get('h') || 360) + 'px';
+  if (!window.naver || !naver.maps.Panorama) return done('none');
+  var pano = new naver.maps.Panorama('p', {
+    position: new naver.maps.LatLng(+q.get('lat'), +q.get('lon')),
+    pov: {pan: +q.get('pan') || 0, tilt: +q.get('tilt') || 2, fov: +q.get('fov') || 90},
+    flightSpot: false, aroundControl: false, zoomControl: false, logoControl: true, mapDataControl: false
+  });
+  var W = +q.get('w') || 640, H = +q.get('h') || 360;
+  function fit(){ try { pano.setSize(new naver.maps.Size(W, H)); } catch (e) {} }
+  fit(); setTimeout(fit, 300);
+  naver.maps.Event.addListener(pano, 'pano_status', function(st){
+    fit();
+    if (st === naver.maps.PanoramaStatus.ERROR) done('none');
+    else setTimeout(function(){ done('ready'); }, 2500);   // 타일이 다 그려질 시간을 준다
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+/* 출발 전 브리핑 — 왼쪽: 전체 경로 지도(고정), 오른쪽: 순서대로 확인하는 체크리스트 */
+body.brief{overflow: visible; height: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 560px); min-height: 100vh; background: var(--bg)}
+.b-map{position: sticky; top: 0; height: 100vh}
+#bmap{width: 100%; height: 100%}
+.b-maplegend{
+  position: absolute; left: 12px; bottom: 28px; z-index: 5; display: flex; gap: 12px; flex-wrap: wrap;
+  background: rgba(255,255,255,.95); border-radius: 10px; padding: 8px 12px; font-size: var(--fs-xs); box-shadow: 0 2px 10px rgba(0,0,0,.14)
+}
+.b-maplegend span{display: inline-flex; align-items: center; gap: 6px}
+.b-fit{position: absolute; left: 12px; top: 12px; z-index: 5; border: 0; border-radius: 10px; background: var(--surface); box-shadow: 0 2px 10px rgba(0,0,0,.16); min-height: 38px; padding: 0 12px; font-weight: 700; font-size: var(--fs-sm)}
+.b-report{background: var(--surface); min-height: 100vh; box-shadow: -4px 0 18px rgba(0,0,0,.06)}
+.b-loading{padding: 60px 24px; text-align: center; color: var(--muted)}
+
+/* 머리 */
+.b-top{position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); padding: 14px 22px 12px}
+.b-top h1{font-size: var(--fs-lg); font-weight: 800}
+.b-top .trip{color: var(--ink-2); font-size: var(--fs-sm); margin-top: 2px}
+.b-prog{display: flex; align-items: center; gap: 10px; margin-top: 10px}
+.b-prog .bar{flex: 1; height: 8px; border-radius: 99px; background: var(--line-2); overflow: hidden}
+.b-prog .bar i{display: block; height: 100%; background: var(--smooth); transition: width .3s}
+.b-prog .cnt{font-size: var(--fs-sm); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums}
+.b-prog .btn{min-height: 34px}
+
+.b-sec{padding: 18px 22px; border-bottom: 8px solid var(--bg)}
+.b-sec > h2{font-size: var(--fs-md); font-weight: 800; margin-bottom: 10px}
+.b-sec > p.lead{color: var(--ink-2); margin: 0 0 12px}
+.b-facts{display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px}
+.b-facts span{background: var(--bg); border-radius: 10px; padding: 6px 10px; font-size: var(--fs-sm)}
+.b-facts b{font-size: var(--fs-md)}
+.b-ai{background: linear-gradient(180deg, #f5f8ff, #fff); border: 1px solid var(--blue-line); border-radius: 12px; padding: 12px 14px; margin-top: 12px}
+.b-ai p{margin: 6px 0 0; line-height: 1.7}
+
+/* 길 이해하기: 큰 도로 띠 */
+.legs{display: flex; height: 12px; border-radius: 99px; overflow: hidden; gap: 2px; margin: 4px 0 10px}
+.legs i{display: block; min-width: 4px}
+.leglist{list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; counter-reset: leg}
+.leglist li{display: grid; grid-template-columns: 54px 1fr auto; gap: 8px; align-items: baseline; font-size: var(--fs-sm)}
+.leglist .km0{color: var(--muted); font-variant-numeric: tabular-nums}
+.leglist .nm{font-weight: 600}
+.leglist .len{color: var(--muted); font-variant-numeric: tabular-nums}
+
+/* 체크리스트 */
+.chk{list-style: none; margin: 0; padding: 0; display: grid; gap: 10px}
+.it{border: 1px solid var(--line); border-radius: 14px; background: var(--surface); scroll-margin-top: 110px; transition: border-color .15s, box-shadow .15s}
+.it.active{border-color: var(--blue); box-shadow: 0 4px 18px rgba(46,111,242,.14)}
+.it.done:not(.active){opacity: .72}
+.it-head{width: 100%; display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: start; text-align: left; border: 0; background: none; padding: 12px 14px}
+.it-no{width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: var(--fs-sm); color: #fff; background: var(--blue)}
+.it.hz .it-no{background: #d93a2b}
+.it.done .it-no{background: var(--smooth)}
+.it-title{display: grid; gap: 2px}
+.it-title .meta{font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums}
+.it-title .ins{font-weight: 700; line-height: 1.45}
+.it-badge{font-size: var(--fs-xs); font-weight: 800; padding: 2px 8px; border-radius: 99px; background: var(--blue-weak); color: #1b5fd9; white-space: nowrap}
+.it.hz .it-badge{background: #fdeaea; color: #b3261e}
+.it-body{padding: 0 14px 14px}
+.it:not(.active) .it-body{display: none}
+
+.clues{display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px}
+.clue{display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); border-radius: 10px; padding: 6px 10px; background: var(--bg)}
+.clue.sign{background: #0b6b3a; color: #fff; font-weight: 700}      /* 도로 표지판 색 */
+.clue.sign small{color: #cfe9da; font-weight: 500}
+.clue.lane b{font-size: 17px; line-height: 1}
+
+/* 후보 지점: 멀리 → 가까이 */
+.cands{display: flex; gap: 0; margin: 0 0 10px; padding: 0; list-style: none; position: relative}
+.cands::before{content: ''; position: absolute; left: 12px; right: 12px; top: 13px; height: 3px; background: var(--line); border-radius: 2px}
+.cands li{flex: 1; position: relative}
+.cands button{width: 100%; border: 0; background: none; display: grid; justify-items: center; gap: 4px; padding: 0 2px; font-size: var(--fs-xs); color: var(--muted)}
+.cands .dot{width: 26px; height: 26px; border-radius: 50%; background: var(--surface); border: 3px solid #c3cad3; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: var(--ink-2); position: relative; z-index: 1}
+.cands button[aria-current=true]{color: var(--ink); font-weight: 700}
+.cands button[aria-current=true] .dot{border-color: var(--blue); background: var(--blue); color: #fff}
+.cands .lb{text-align: center; line-height: 1.3}
+
+.bview{isolation: isolate; position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #e9ecef}
+.bview .pano{width: 100%; height: 100%}
+.bview .cap{position: absolute; left: 0; right: 0; top: 0; padding: 8px 48px 16px 10px; color: #fff; font-size: var(--fs-xs); font-weight: 600; pointer-events: none; background: linear-gradient(to bottom, rgba(16,20,24,.72), rgba(16,20,24,0)); z-index: 2}
+.bview.loading::after{content: '로드뷰 불러오는 중…'; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: var(--fs-sm)}
+.bview.none::after{content: '이 지점은 로드뷰가 없어요'; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: var(--fs-sm); background: #e9ecef; z-index: 1}
+.bview .full{position: absolute; right: 8px; top: 8px; z-index: 3; width: 34px; height: 34px; border: 0; border-radius: 9px; background: rgba(20,24,28,.6); color: #fff}
+.bview.full-on{position: fixed; inset: 0; z-index: 1000; border-radius: 0; aspect-ratio: auto}
+.say{margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--blue-weak); line-height: 1.65}
+.say b{display: block; font-size: var(--fs-sm); color: #1b5fd9; margin-bottom: 2px}
+.ainote{margin: 10px 0 0; font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.65}
+.ainote .ai-badge{margin: 0 6px 0 0; vertical-align: 1px}
+.it-actions{display: flex; gap: 8px; margin-top: 12px}
+.it-actions .btn{flex: 1}
+
+.b-foot{padding: 18px 22px 40px; color: var(--muted); font-size: var(--fs-xs); line-height: 1.7}
+.b-minor{font-size: var(--fs-sm); color: var(--ink-2)}
+.b-minor ul{margin: 6px 0 0; padding-left: 18px}
+
+/* 지도 마커 */
+.mk{display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font: 800 12px/1 var(--font); color: #fff; background: var(--blue); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35)}
+.mk.hz{background: #d93a2b}
+.mk.done{background: var(--smooth)}
+.mk.on{width: 32px; height: 32px; font-size: 14px; box-shadow: 0 0 0 5px rgba(46,111,242,.3), 0 2px 8px rgba(0,0,0,.35)}
+#bmap .mk{transform: translate(-50%, -50%); cursor: pointer}
+.cand-dot{display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 3px solid var(--blue); font-size: 10px; color: var(--blue)}
+.cmk{transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 2px; pointer-events: auto; cursor: pointer}
+.cmk i{width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--blue); box-shadow: 0 1px 3px rgba(0,0,0,.3)}
+.cmk span{font: 700 11px/1.2 var(--font); background: rgba(255,255,255,.95); padding: 1px 5px; border-radius: 5px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.2)}
+.cmk.on i{background: var(--blue)}
+.cmk.on span{background: var(--blue); color: #fff}
+.cone{width: 0; height: 0; transform-origin: 50% 100%}
+
+@media (max-width: 860px){
+  body.brief{display: block}            /* 그리드 안에서는 sticky 가 행 높이에 갇힌다 */
+  .b-map{position: sticky; top: 0; height: 38vh; z-index: 20}
+  .b-report{min-height: auto}
+  .b-top{top: 38vh}
+  .it{scroll-margin-top: calc(38vh + 130px)}
+  .b-sec, .b-top{padding-left: 14px; padding-right: 14px}
+  .b-maplegend{display: none}
+}
+
+@media print{
+  body.brief{display: block}
+  .b-map, .b-prog, .it-actions, .bview{display: none}
+  .it .it-body{display: block !important}
+}
+
+/* 체크 지점 사이 구간 (그냥 따라가는 길) */
+.seg{list-style: none}
+.seg-card{background: var(--bg); border-radius: 12px; padding: 12px 14px; font-size: var(--fs-sm); border-left: 4px solid #c9ced4}
+.seg-head{display: flex; gap: 8px; align-items: baseline; font-weight: 700; color: var(--ink-2)}
+.seg-ic{color: #8e97a1}
+.seg-len{margin-left: auto; color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap}
+.seg-lead{margin: 6px 0 0; line-height: 1.7; color: var(--ink)}
+.seg-notes{margin: 6px 0 0; color: #1b5fd9}
+.seg-steps{margin-top: 6px}
+.seg-steps summary{cursor: pointer; color: var(--blue); font-weight: 600; min-height: 30px}
+.seg-steps ol, .seg-steps-list{list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px}
+.seg-steps li, .seg-steps-list li{display: flex; gap: 8px}
+.seg-steps .gl, .seg-steps-list .gl{width: 20px; text-align: center; color: var(--ink-2)}
+.seg-map{margin-top: 4px; padding-left: 0}
+
+/* 후보 지점 = 문자(A·B·C) — 체크 번호와 구분 */
+.cmk i{width: 20px; height: 20px; display: grid; place-items: center; font: 800 11px/1 var(--font); font-style: normal; color: var(--blue)}
+.cmk.on i{color: #fff}

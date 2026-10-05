@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>출발 전 브리핑 · 길찾기</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<link rel="stylesheet" href="/css/app.css" />
+<link rel="stylesheet" href="/css/briefing.css" />
+</head>
+<body class="brief">
+
+<div class="b-map"><div id="bmap" aria-label="전체 경로 지도"></div>
+  <button id="fitall" class="b-fit">⤢ 전체 경로</button>
+  <div class="b-maplegend" aria-hidden="true">
+    <span><b class="mk man">1</b>체크 지점</span><span><b class="mk hz">2</b>사고 이력 지점</span><span><b class="cand-dot">A</b>미리 볼 곳(멀리→가까이)</span>
+  </div>
+</div>
+
+<main class="b-report" id="report" aria-busy="true">
+  <div class="b-loading">브리핑을 준비하는 중…</div>
+</main>
+
+<div id="status" class="sr" aria-live="polite"></div>
+
+<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=__NCP_KEY_ID__&submodules=panorama"></script>
+<script type="module" src="/js/briefing.js"></script>
+</body>
+</html>
